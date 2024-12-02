@@ -20,6 +20,24 @@ DEVICE_INFO_UUID = "0000180A-0000-1000-8000-00805F9B34FB"
 DEVICE_HW_UUID = "00002A27-0000-1000-8000-00805F9B34FB"
 DEVICE_FW_UUID = "00002A26-0000-1000-8000-00805F9B34FB"
 
+DEVICE_NAME_PREFIXES = [
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R09",
+    "VK-5098",
+    "MERLIN",
+    "Hello Ring",
+    "RING1",
+    "boAtring",
+    "TR-R02",
+    "SE",
+]
+
 logger = logging.getLogger(__name__)
 
 

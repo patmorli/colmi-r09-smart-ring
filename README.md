@@ -1,6 +1,10 @@
 # Colmi R02 Client
 
+> **Note**: This is a fork of the [original Colmi R02 Client](https://github.com/tahnok/colmi_r02_client) by Wesley Ellis. The original work and all credit goes to the original author. This fork is maintained to track personal modifications and improvements while working with the R09 ring model.
+
 Open source python client to read your data from the Colmi R02 family of Smart Rings. 100% open source, 100% offline.
+
+[Original Source Code](https://github.com/tahnok/colmi_r02_client) | [This Fork](https://github.com/patrickmayerhofer/colmi-r09-smart-ring)
 
 [Source code on GitHub](https://github.com/tahnok/colmi_r02_client)
 
@@ -60,6 +64,17 @@ You can get it on [here on AliExpress](https://www.aliexpress.com/item/100500663
  - simple web interface
 
 ## Getting started
+
+### Connection Requirements for R09 Ring
+
+**Important:** The following instructions are specifically for the R09 model ring. Before using the client, ensure the following:
+1. The ring must be in its charging case to be discoverable and connectable
+2. The ring must be disconnected from the QRing app on your phone
+3. The ring must be "forgotten" from your phone's Bluetooth settings
+4. If the ring was previously paired with your computer, you need to "forget" it from your computer's Bluetooth settings
+5. The ring must not be connected to any other devices
+
+These steps ensure the ring is in a clean state and ready to connect with the client.
 
 ### Using the command line
 
