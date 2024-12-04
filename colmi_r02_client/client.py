@@ -80,9 +80,37 @@ multi packet messages where the parser has state
 class Client:
     def __init__(self, address: str, record_to: Path | None = None):
         self.address = address
-        self.bleak_client = BleakClient(self.address)
+        self.bleak_client = BleakClient(self.address, disconnected_callback=self._handle_disconnect)
         self.queues: dict[int, asyncio.Queue] = {cmd: asyncio.Queue() for cmd in COMMAND_HANDLERS}
         self.record_to = record_to
+        self._is_connected = False
+        self._reconnect_task = None
+
+    async def _handle_disconnect(self, client: BleakClient) -> None:
+        """Handle disconnection events and attempt to reconnect."""
+        logger.warning("Device disconnected")
+        self._is_connected = False
+        
+        if self._reconnect_task is None or self._reconnect_task.done():
+            self._reconnect_task = asyncio.create_task(self._auto_reconnect())
+
+    async def _auto_reconnect(self) -> None:
+        """Attempt to reconnect to the device."""
+        while not self._is_connected:
+            try:
+                logger.info("Attempting to reconnect...")
+                await self.connect()
+                self._is_connected = True
+                logger.info("Reconnection successful")
+                break
+            except Exception as e:
+                logger.error(f"Reconnection failed: {str(e)}")
+                await asyncio.sleep(5)  # Wait before next attempt
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if the client is currently connected."""
+        return self._is_connected
 
     async def __aenter__(self) -> "Client":
         logger.info(f"Connecting to {self.address}")
@@ -102,45 +130,77 @@ class Client:
         await self.disconnect()
 
     async def connect(self):
-        await self.bleak_client.connect()
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                await self.bleak_client.connect()
+                
+                nrf_uart_service = self.bleak_client.services.get_service(UART_SERVICE_UUID)
+                assert nrf_uart_service
+                rx_char = nrf_uart_service.get_characteristic(UART_RX_CHAR_UUID)
+                assert rx_char
+                self.rx_char = rx_char
 
-        nrf_uart_service = self.bleak_client.services.get_service(UART_SERVICE_UUID)
-        assert nrf_uart_service
-        rx_char = nrf_uart_service.get_characteristic(UART_RX_CHAR_UUID)
-        assert rx_char
-        self.rx_char = rx_char
-
-        await self.bleak_client.start_notify(UART_TX_CHAR_UUID, self._handle_tx)
+                await self.bleak_client.start_notify(UART_TX_CHAR_UUID, self._handle_tx)
+                self._is_connected = True  # Set connected state after successful connection
+                logger.info("Successfully connected to device")
+                return
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error("Max retries reached. Could not establish connection.")
+                    raise
 
     async def disconnect(self):
+        self._is_connected = False  # Set disconnected state before disconnecting
         await self.bleak_client.disconnect()
 
-    def _handle_tx(self, _: BleakGATTCharacteristic, packet: bytearray) -> None:
+    def _handle_tx(self, _: BleakGATTCharacteristic, data_packet: bytearray) -> None:
         """Bleak callback that handles new packets from the ring."""
+        try:
+            logger.info(f"Received packet {data_packet}")
 
-        logger.info(f"Received packet {packet}")
+            assert len(data_packet) == 16, f"Packet is the wrong length {data_packet}"
+            packet_type = data_packet[0]
+            assert packet_type < 127, f"Packet has error bit set {data_packet}"
 
-        assert len(packet) == 16, f"Packet is the wrong length {packet}"
-        packet_type = packet[0]
-        assert packet_type < 127, f"Packet has error bit set {packet}"
-
-        if packet_type in COMMAND_HANDLERS:
-            result = COMMAND_HANDLERS[packet_type](packet)
-            if result is not None:
-                self.queues[packet_type].put_nowait(result)
+            if packet_type in COMMAND_HANDLERS:
+                result = COMMAND_HANDLERS[packet_type](data_packet)
+                if result is not None:
+                    self.queues[packet_type].put_nowait(result)
+                else:
+                    logger.debug(f"No result returned from parser for {packet_type}")
             else:
-                logger.debug(f"No result returned from parser for {packet_type}")
-        else:
-            logger.warning(f"Did not expect this packet: {packet}")
+                logger.warning(f"Did not expect this packet: {data_packet}")
 
-        if self.record_to is not None:
-            with self.record_to.open("ab") as f:
-                f.write(packet)
-                f.write(b"\n")
+            if self.record_to is not None:
+                with self.record_to.open("ab") as f:
+                    f.write(data_packet)
+                    f.write(b"\n")
+        except Exception as e:
+            logger.error(f"Error handling packet: {str(e)}")
+            self._is_connected = False  # Mark as disconnected on error
 
-    async def send_packet(self, packet: bytearray) -> None:
+    async def send_packet(self, packet: bytearray, timeout: float = 5.0) -> None:
+        """Send a packet to the device with timeout handling."""
         logger.debug(f"Sending packet: {packet}")
-        await self.bleak_client.write_gatt_char(self.rx_char, packet, response=False)
+        try:
+            if not self._is_connected:
+                raise ConnectionError("Not connected to device")
+                
+            async with asyncio.timeout(timeout):
+                await self.bleak_client.write_gatt_char(self.rx_char, packet, response=False)
+        except asyncio.TimeoutError:
+            logger.error(f"Send packet operation timed out after {timeout} seconds")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to send packet: {str(e)}")
+            raise
 
     async def get_battery(self) -> battery.BatteryInfo:
         await self.send_packet(battery.BATTERY_PACKET)

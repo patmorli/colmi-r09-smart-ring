@@ -68,13 +68,25 @@ You can get it on [here on AliExpress](https://www.aliexpress.com/item/100500663
 ### Connection Requirements for R09 Ring
 
 **Important:** The following instructions are specifically for the R09 model ring. Before using the client, ensure the following:
-1. The ring must be in its charging case to be discoverable and connectable
-2. The ring must be disconnected from the QRing app on your phone
-3. The ring must be "forgotten" from your phone's Bluetooth settings
-4. If the ring was previously paired with your computer, you need to "forget" it from your computer's Bluetooth settings
-5. The ring must not be connected to any other devices
+1. The ring must be disconnected from the QRing app on your phone
+2. The ring must be "forgotten" from your phone's Bluetooth settings
+3. If the ring was previously paired with your computer, you need to "forget" it from your computer's Bluetooth settings
+4. The ring must not be connected to any other devices
 
 These steps ensure the ring is in a clean state and ready to connect with the client.
+
+#### Known Connection Limitations
+- After each command execution, you'll need to "forget" the ring from your computer's Bluetooth settings before running another command
+- Real-time heart rate monitoring works reliably for a single session
+- For best results on macOS, use the `--name` parameter instead of `--address` when connecting
+- The connection might take a few attempts, especially after a previous session
+
+#### Example Connection Flow
+1. Forget the ring from your computer's Bluetooth settings
+2. Run your desired command (e.g., `colmi_r02_client --name "R09" get-real-time heart-rate`)
+3. After the command completes, forget the ring again before running another command
+
+We are actively working on improving these connection limitations to provide a more seamless experience.
 
 ### Using the command line
 
